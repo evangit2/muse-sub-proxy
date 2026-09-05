@@ -29,8 +29,13 @@ LaunchAgent: `cp com.muse-sub-proxy.plist ~/Library/LaunchAgents/ && launchctl l
 
 ## Endpoints
 
-- `GET /v1/models` — live list from Meta, filtered to known Muse Spark ids
-- `POST /v1/chat/completions` — OpenAI chat format, `stream: true/false`
+- `GET /v1/models` — live ids from Meta (statics are fallback only, so new
+  models survive CLI/API updates with no proxy change)
+- `GET /v1/usage` — latest subscription quota snapshot (see below), persisted
+  to `~/.config/muse-sub-proxy/usage.json` after every chat completion
+- `POST /v1/chat/completions` — OpenAI chat format, `stream: true/false`.
+  Both modes return the token `usage` object; both also carry an extra
+  `subscription` block (quota snapshot for that exact call).
 
 ## OpenCode / Hermes example
 
@@ -75,6 +80,41 @@ Hermes: provider entry `muse-sub` with `base_url: http://127.0.0.1:8920/v1`
   grant Always Allow once and `security find-generic-password` works headless.
 - `muse serve`/`schema` show the CLI's MSP plane (`session/*`, `turn/*`),
   irrelevant once you go direct REST.
+- **Usage: yes, via SSE.** `strings` on `muse-bin-*` shows
+  `SubscriptionUsageSnapshot{window, weekly}` /
+  `SubscriptionWindowSnapshot{window_duration_mins, used_percent, resets_at}` /
+  `SubscriptionWeeklySnapshot{used_percent, resets_at}` sitting next to the
+  Responses stream-event structs. MITM (`--base-url` at a logging forwarder +
+  one `muse exec`) confirmed: every streamed `POST /v1/responses` ends with
+  `event: response.subscription_usage`, e.g.
+  `{"subscription":{"tier":"…","weekly":{"resets_at":…,"used_percent":0},
+  "window":{"resets_at":…,"used_percent":1,"window_duration_mins":300}}}`.
+  `window_duration_mins: 300` = the 5-hour prompt bucket. Trigger = `stream`
+  alone — no special headers needed (verified: bare streamed call returns it,
+  non-stream never does). The proxy therefore always streams upstream and
+  exposes the snapshot per-call + via `GET /v1/usage`.
+- No REST usage endpoint exists: every `/v1/usage`, `/v1/billing`,
+  `/v1/subscription`, `/v1/me`-style guess 404s; response headers carry no
+  quota fields. Subscription *management* stays web-only (Accounts Center;
+  `/upgrade` opens `accountscenter.meta.com/muse_code/` with an `ep=` tag;
+  `/subscription` is retired). Bonus find: `GET https://api.meta.ai/muse-code/models`
+  (note: NOT under `/v1/`) returns the model catalog with `muse-code` metadata
+  (capabilities, limits, reasoning variants).
+
+## Update-survival
+
+`muse` CLI updates cannot break the proxy: it never executes, imports, or
+reads version state from the CLI — only the `LLM|` key (keychain/env/file)
+and `https://api.meta.ai` REST. Concretely:
+
+- model list is fetched live (`/v1/models`), statics are fallback only;
+- SSE parsing ignores unknown events; usage snapshot is optional — a missing
+  `response.subscription_usage` degrades to "no quota data", never an error;
+  if `response.completed` ever disappears the reply is rebuilt from deltas;
+- HTTP 401 drops the cached key and re-reads once (key rotation / re-login
+  needs no proxy restart);
+- the only future breakage vector is Meta changing the REST contract itself,
+  which would break the CLI too and show up immediately as upstream errors.
 
 ## Value test
 
