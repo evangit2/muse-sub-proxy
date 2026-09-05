@@ -203,7 +203,9 @@ def _consume_sse(req):
                 s = d.get("subscription")
                 if isinstance(s, dict):
                     sub = s
-            elif etype == "response.completed":
+            elif etype in ("response.completed", "response.incomplete",
+                           "response.failed", "response.cancelled"):
+                # terminal events all carry the full response object
                 if isinstance(d.get("response"), dict):
                     resp_obj = d["response"]
                 else:
@@ -344,6 +346,8 @@ class H(http.server.BaseHTTPRequestHandler):
             save_usage(sub, resp.get("model", model))
         text = response_text(resp)
         usage = resp.get("usage", {}) or {}
+        status = (resp.get("status") or "completed") if isinstance(resp, dict) else "completed"
+        finish = "length" if status == "incomplete" else "stop"
         created = int(time.time())
         cid = resp.get("id", "chatcmpl-sub-%d" % created) or "chatcmpl-sub-%d" % created
 
@@ -353,7 +357,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 "model": resp.get("model", model),
                 "choices": [{"index": 0,
                              "message": {"role": "assistant", "content": text},
-                             "finish_reason": "stop"}],
+                             "finish_reason": finish}],
                 "usage": usage,
             }
             if sub is not None:
@@ -381,7 +385,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(("data: %s\n\n" % json.dumps(chunk)).encode())
             tail = {"id": cid, "object": "chat.completion.chunk", "created": created,
                     "model": model,
-                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": finish}],
                     "usage": usage}
             if sub is not None:
                 tail["subscription"] = sub
