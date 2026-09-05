@@ -101,8 +101,31 @@ Hermes: provider entry `muse-sub` with `base_url: http://127.0.0.1:8920/v1`
   (note: NOT under `/v1/`) returns the model catalog with `muse-code` metadata
   (capabilities, limits, reasoning variants).
 
-## Update-survival
+## Real session mechanics (MITM'd live sessions)
 
+- One session = one UUID: `prompt_cache_key: tbh:main:<uuid>`, stable across
+  prompts (`muse exec --session-id <uuid>` continues headlessly). No other
+  endpoints during a run: `GET /muse-code/models` once, then only
+  `POST /v1/responses` (streamed).
+- Every turn re-sends everything (`store: false`, no `previous_response_id`):
+  ~37KB `instructions` + ~33KB workspace-identity reminder + full history
+  (user msgs, reasoning items, function_call/outputs, assistant msgs).
+- Turn 1 full-price (~23K tokens uncached); turns 2+ ~99% prefix-cached.
+  A follow-up prompt in the same session starts 99% cached (23.4/23.6K).
+  Two full user prompts (6 turns, ~140K tokens) moved the meter 0 points.
+- The meter counts uncached-weighted spend, not prompts: ~$0.06-0.09
+  standard per window point. Cached tokens are ~free for quota. The session
+  key itself creates no discount — exact byte prefixes do (changing one
+  opening line zeroed the hit rate); automatic prefix cache works with or
+  without the key.
+- Calibration (1.3-standard, exact `usage` tokens, both price tiers):
+  window 100% ≈ $6.50 std / ~$0.50 contrib (±30%); weekly ticks ~1/3-1/4
+  the rate → ≈ $17-25 std. Contributor drains identically to standard —
+  always use standard via the sub (same quota, no training on your data).
+- Reasoning cost per trivial turn: minimal ≈ 40-170 output tokens,
+  high ≈ 160-490. Output ($4.25/M) dominates small-call cost.
+
+## Update-survival
 `muse` CLI updates cannot break the proxy: it never executes, imports, or
 reads version state from the CLI — only the `LLM|` key (keychain/env/file)
 and `https://api.meta.ai` REST. Concretely:
