@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.muse-sub-proxy</string>
+  <key>ProgramArguments</key><array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/rsks/muse-sub-proxy/proxy.py</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>
+    <key>SUB_PROXY_PORT</key><string>8920</string>
+    <key>SUB_PROXY_XDG</key><string>/tmp/muse-sub-test</string>
+    <key>SUB_PROXY_MODEL</key><string>muse-spark-1.2</string>
+    <key>SUB_PROXY_WORKSPACE</key><string>/tmp</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/muse-sub-proxy.log</string>
+  <key>StandardErrorPath</key><string>/tmp/muse-sub-proxy.log</string>
+</dict>
+</plist>
