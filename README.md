@@ -144,6 +144,21 @@ and `https://api.meta.ai` REST. Concretely:
 Each proxied request = one metered sub prompt (Everyday $5: 10–50 / 5h).
 Compare drained prompts vs pay-as-you-go token cost to find the crossover.
 
+## Stretch guide (verified measurements, 1.3-standard)
+
+- `reasoning_effort: minimal` ≈ 9x output cut on light work (248→27 out
+  tokens, correct answers). Biggest lever on small calls, where output
+  ($4.25/M) dominates. Omit for max quality on hard code.
+- `sub_session: <name>` chains follow-ups server-side: only the newest user
+  message is re-sent (47 input tokens recalled full context). Pair with
+  minimal effort — chained + default effort reasons over stored context and
+  can blow output caps (509/512, empty reply).
+- Keep prefixes byte-identical across calls (system first, unchanged
+  context): prefix cache hits bill ~$0.15/M cached and don't move the quota
+  meter (71.8K cached call: no tick).
+- Prefer standard models via the sub: contributor drains identically, trains
+  on your data, and has worse rate limits.
+
 ---
 MIT — not affiliated with Meta. Subscription use outside the Muse Code CLI
 violates Meta's sub terms; you accept that risk by running this.

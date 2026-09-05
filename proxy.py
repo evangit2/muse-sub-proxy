@@ -30,6 +30,15 @@ Endpoints:
   GET  /healthz
   POST /v1/chat/completions   (stream: true/false)
 
+Stretch knobs (all opt-in, all verified live):
+  ``reasoning_effort`` request field (or SUB_PROXY_EFFORT env): e.g.
+  "minimal" cut output ~9x on trivia vs upstream default; "none" is
+  rejected upstream. Absent = upstream default (quality-first).
+  ``sub_session`` request field: name a server-side conversation. First call
+  sends full history; follow-ups send only the newest user message plus
+  previous_response_id (verified: 46 input tokens recalled full context).
+  Stateless clients omitting it are unaffected.
+
 Update-survival design (survives `muse` CLI updates untouched):
   - never shells out to, imports, or reads version state from the CLI;
   - model list is fetched live from upstream, never pinned;
@@ -61,6 +70,17 @@ MODELS = [m.strip() for m in os.environ.get(
 CONF_DIR = os.path.expanduser("~/.config/muse-sub-proxy")
 USAGE_PATH = os.path.join(CONF_DIR, "usage.json")
 _usage_lock = threading.Lock()
+
+# opt-in server-side conversation chains: sub_session name -> last response id.
+# Stateless clients are unaffected; only requests carrying "sub_session" use it.
+_sessions = {}
+_sessions_lock = threading.Lock()
+
+# Client-controllable reasoning knob: request field "reasoning_effort" or env.
+# Upstream default (field absent) = quality-first. "minimal" cut output ~9x
+# on trivia (248 -> 27 tokens) with correct answers; "none" is rejected
+# upstream, "minimal" is the floor.
+EFFORT_DEFAULT = os.environ.get("SUB_PROXY_EFFORT", "").strip()
 
 _key_cache = {"key": "", "at": 0}
 
@@ -261,6 +281,21 @@ def messages_to_input(messages):
     return "\n\n".join(p for p in parts if p.strip())
 
 
+def newest_user_text(messages):
+    """Latest user message as plain text (for chained session turns)."""
+    for m in reversed(messages or []):
+        if m.get("role", "user") == "user":
+            content = m.get("content", "")
+            if isinstance(content, list):
+                content = "\n".join(
+                    p.get("text", "") for p in content
+                    if isinstance(p, dict) and p.get("type") == "text")
+            content = str(content).strip()
+            if content:
+                return content
+    return ""
+
+
 def response_text(resp):
     """Pull assistant text out of a /responses object."""
     texts = []
@@ -328,11 +363,25 @@ class H(http.server.BaseHTTPRequestHandler):
             self._send(400, b'{"error":"empty prompt"}')
             return
         stream = bool(req.get("stream"))
+        payload = {"model": model, "input": prompt,
+                   "max_output_tokens": req.get("max_tokens") or 4096}
+        effort = (req.get("reasoning_effort") or EFFORT_DEFAULT or "").strip()
+        if effort:
+            payload["reasoning"] = {"effort": effort}
+        # Opt-in server-side session: follow-ups send only the newest user
+        # message plus previous_response_id instead of the full history.
+        sess = (req.get("sub_session") or "").strip() if isinstance(
+            req.get("sub_session"), str) else ""
+        if sess:
+            with _sessions_lock:
+                prev = _sessions.get(sess)
+            if prev:
+                delta = newest_user_text(req.get("messages", []))
+                if delta:
+                    payload["input"] = delta
+                    payload["previous_response_id"] = prev
         try:
-            status, resp, sub = upstream_stream("/responses", {
-                "model": model, "input": prompt,
-                "max_output_tokens": req.get("max_tokens") or 4096,
-            })
+            status, resp, sub = upstream_stream("/responses", payload)
         except RuntimeError as e:
             self._send(500, json.dumps({"error": str(e)}).encode())
             return
@@ -342,6 +391,9 @@ class H(http.server.BaseHTTPRequestHandler):
         if status // 100 != 2:
             self._send(status, json.dumps(resp).encode())
             return
+        if sess and isinstance(resp, dict) and resp.get("id"):
+            with _sessions_lock:
+                _sessions[sess] = resp["id"]
         if sub is not None:
             save_usage(sub, resp.get("model", model))
         text = response_text(resp)
