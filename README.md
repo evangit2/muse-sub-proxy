@@ -1,49 +1,38 @@
-# muse-sub-proxy
+# muse-sub-proxy (standalone)
 
-Expose a **Muse Code subscription** through OpenAI-compatible APIs, same idea as the antigravity proxy but for the opposite direction.
+Expose Meta API access through OpenAI-compatible endpoints. **No `muse` CLI anywhere** — pure Python stdlib talking direct REST to `https://api.meta.ai/v1`.
 
 ```
-External tool (OpenCode/etc)          muse-sub-proxy              real `muse` CLI
-  POST /v1/chat/completions  --->  translate to one prompt  --->  `muse exec`
-  OpenAI JSON (+SSE)         <---  CLI stdout as answer    <---  sub auth (keychain)
+External tool (OpenCode/Hermes/etc)     muse-sub-proxy              Meta API
+  POST /v1/chat/completions  --->  POST /v1/responses (Bearer LLM|) --->  Muse Spark
+  OpenAI JSON (+SSE)         <---  output_text translated     <---
 ```
-
-## Why subprocess, not token theft
-
-The sub credential is keychain OAuth (`device_code`, `api_base_url: https://api.meta.ai/v1`), not a static Bearer key, and usage is entitlement-checked. Driving the real CLI keeps auth/refresh/entitlement on Meta's binary — survives CLI updates. Cost: one HTTP request = one `muse exec` turn, no token streaming.
 
 ## Setup
 
-1. One-time login (device-code flow):
-   ```
-   export PATH="$HOME/.local/bin:$PATH"
-   env -u META_API_KEY muse login
-   ```
-   Approve with the account holding the sub. Verify:
-   ```
-   cat ~/.config/muse/auth.json   # mechanism: oauth, storage: keychain
-   ```
-2. Clean sub-mode config (gateway pin would hijack traffic — keep it separate!):
-   ```
-   # /tmp/muse-sub-test/muse/settings.json
-   {"schema_version": 1, "model": "muse-spark-1.2", "provider": "meta"}
-   cp ~/.config/muse/auth.json /tmp/muse-sub-test/muse/auth.json
-   env -u META_API_KEY XDG_CONFIG_HOME=/tmp/muse-sub-test muse exec "reply with exactly: SUB_OK"
-   # -> SUB_OK
-   ```
-   Your daily-driver `~/.config/muse/settings.json` stays pinned to `:8914`.
-3. Run:
-   ```
-   SUB_PROXY_PORT=8920 SUB_PROXY_XDG=/tmp/muse-sub-test python3 proxy.py
-   curl -s localhost:8920/v1/models
-   ```
+No CLI needed at runtime. You need one Meta API key (`LLM|...`), resolved as:
+
+1. `MUSE_SUB_API_KEY` env var (Linux/portable), or
+2. macOS keychain item `ai.meta.dev.credentials` / account `meta` (read via
+   `security` CLI — one-time Always-Allow approval), or
+3. `~/.config/muse-sub-proxy/api_key.txt` (mode 0600).
+
+Run:
+
+```
+python3 proxy.py                        # :8920
+SUB_PROXY_PORT=8921 python3 proxy.py    # custom port
+curl -s localhost:8920/v1/models
+```
+
+LaunchAgent: `cp com.muse-sub-proxy.plist ~/Library/LaunchAgents/ && launchctl load ...`
 
 ## Endpoints
 
-- `GET /v1/models` — `muse-spark-1.2`, `muse-spark-1.3`
+- `GET /v1/models` — live list from Meta, filtered to known Muse Spark ids
 - `POST /v1/chat/completions` — OpenAI chat format, `stream: true/false`
 
-## OpenCode example
+## OpenCode / Hermes example
 
 ```json
 {
@@ -61,13 +50,37 @@ The sub credential is keychain OAuth (`device_code`, `api_base_url: https://api.
 }
 ```
 
+Hermes: provider entry `muse-sub` with `base_url: http://127.0.0.1:8920/v1`
+(set via `hermes config set providers.muse-sub.base_url ...`).
+
+## Reverse-engineering notes (how we got here)
+
+- Subscription page says "10–50 **prompts** every 5 hours" — weighted user
+  prompts, each fanning out into dozens/hundreds of internal model calls.
+- The `muse` launcher (`~/.local/bin/muse`, plain bash) contains the whole
+  OAuth device flow in cleartext: `https://auth.meta.com` +
+  `/oidc/device/authorization/` + `/oidc/device/token/`, public
+  `client_id 1031625952748946`. No scopes accepted
+  (`invalid_scope` if you try).
+- A self-minted device token (`dca:...`) gets `invalid_api_key` on **every**
+  `api.meta.ai` path — the raw OAuth token is NOT an API credential.
+- `muse login` stores `{"api_key": "LLM|...", "access_token": "dca:..."}`
+  in keychain service `ai.meta.dev.credentials`. The `LLM|` key is what
+  actually authorizes `/v1/responses` + `/v1/models` (both verified 200).
+- The mint endpoint for that key was never found (no exchange paths on either
+  host; launcher handles downloads only). So onboarding a fresh machine still
+  takes one Meta OAuth login to populate the key — after that the CLI is
+  unnecessary: this proxy reads the key and talks REST directly.
+- Keychain reads from a new binary trigger one macOS approval prompt;
+  grant Always Allow once and `security find-generic-password` works headless.
+- `muse serve`/`schema` show the CLI's MSP plane (`session/*`, `turn/*`),
+  irrelevant once you go direct REST.
+
 ## Value test
 
-Each proxied request burns one weighted sub prompt (10–50 / 5h on Everyday $5). Log `/5h` drain vs pay-as-you-go token cost to find the crossover.
-
-## LaunchAgent
-
-See `com.muse-sub-proxy.plist` — `launchctl load ~/Library/LaunchAgents/com.muse-sub-proxy.plist`.
+Each proxied request = one metered sub prompt (Everyday $5: 10–50 / 5h).
+Compare drained prompts vs pay-as-you-go token cost to find the crossover.
 
 ---
-MIT — not affiliated with Meta. Subscription use outside the Muse Code CLI violates Meta's sub terms; you accept that risk by running this.
+MIT — not affiliated with Meta. Subscription use outside the Muse Code CLI
+violates Meta's sub terms; you accept that risk by running this.
