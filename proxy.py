@@ -34,6 +34,8 @@ Stretch knobs (all opt-in, all verified live):
   ``reasoning_effort`` request field (or SUB_PROXY_EFFORT env): e.g.
   "minimal" cut output ~9x on trivia vs upstream default; "none" is
   rejected upstream. Absent = upstream default (quality-first).
+  1.3 also takes low/medium/high/xhigh/max; 1.2 tops out at xhigh
+  (max rejected) — verified live against the upstream error strings.
   ``sub_session`` request field: name a server-side conversation. First call
   sends full history; follow-ups send only the newest user message plus
   previous_response_id (verified: 46 input tokens recalled full context).

@@ -148,7 +148,10 @@ Compare drained prompts vs pay-as-you-go token cost to find the crossover.
 
 - `reasoning_effort: minimal` ≈ 9x output cut on light work (248→27 out
   tokens, correct answers). Biggest lever on small calls, where output
-  ($4.25/M) dominates. Omit for max quality on hard code.
+  ($4.25/M) dominates. Omit for max quality on hard code. Full ladder on
+  1.3: minimal/low/medium/high/xhigh/**max** (verified live, `MAX_OK` with
+  193 reasoning tokens on trivia); 1.2 tops out at xhigh. `none` and `ultra`
+  both rejected upstream.
 - `sub_session: <name>` chains follow-ups server-side: only the newest user
   message is re-sent (47 input tokens recalled full context). Pair with
   minimal effort — chained + default effort reasons over stored context and
