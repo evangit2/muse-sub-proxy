@@ -118,10 +118,18 @@ Hermes: provider entry `muse-sub` with `base_url: http://127.0.0.1:8920/v1`
   key itself creates no discount — exact byte prefixes do (changing one
   opening line zeroed the hit rate); automatic prefix cache works with or
   without the key.
-- Calibration (1.3-standard, exact `usage` tokens, both price tiers):
-  window 100% ≈ $6.50 std / ~$0.50 contrib (±30%); weekly ticks ~1/3-1/4
-  the rate → ≈ $17-25 std. Contributor drains identically to standard —
-  always use standard via the sub (same quota, no training on your data).
+- **Calibration 2026-09-17** (60+ measured calls at 55K/165K/274K tokens;
+  window exhausted to confirm capacity): standard drains ~0.5 weekly-pt per
+  55K-token call (~1 pt ≈ 100K tokens; 165K → +2.0, 274K → +3.0). Contributor
+  now drains **~1/6 of standard** (4-8x range; 55K → ~0.1, 274K → 0.25-0.5) —
+  but it drained *identically* on Sept 5, so the contributor rate change
+  landed in between. `used_percent` reads are jittery (±3); tick deltas
+  across a batch are the reliable signal. 1.2 vs 1.3: no meter difference.
+- Capacity (measured by exhaustion): the 5h window died after 5.87M mixed
+  input tokens (3.1M std + 2.7M con ≈ **3.6M std-equivalent ≈ $4.5 std**).
+  Weekly hit 34% on that same burn → weekly ≈ 2.94 windows ≈ **~10-11M std
+  tokens ≈ $13 std-value**. Monthly ceiling ≈ 43-48M std tokens (≈ $55-60)
+  or ~250M+ contributor tokens; the weekly cap binds before the monthly.
 - Reasoning cost per trivial turn: minimal ≈ 40-170 output tokens,
   high ≈ 160-490. Output ($4.25/M) dominates small-call cost.
 
@@ -141,8 +149,11 @@ and `https://api.meta.ai` REST. Concretely:
 
 ## Value test
 
-Each proxied request = one metered sub prompt (Everyday $5: 10–50 / 5h).
-Compare drained prompts vs pay-as-you-go token cost to find the crossover.
+Everyday $5, measured 2026-09-17: quota supports up to ~44-48M standard
+tokens/month (~$55-60 of standard API usage) or ~250M+ contributor tokens
+(~$26 of contributor API usage). The 5h window (~3.6M std-equiv tokens)
+binds first when bingeing; the weekly cap (~10-11M std tokens) binds for
+sustained use.
 
 ## Stretch guide (verified measurements, 1.3-standard)
 
@@ -159,8 +170,10 @@ Compare drained prompts vs pay-as-you-go token cost to find the crossover.
 - Keep prefixes byte-identical across calls (system first, unchanged
   context): prefix cache hits bill ~$0.15/M cached and don't move the quota
   meter (71.8K cached call: no tick).
-- Prefer standard models via the sub: contributor drains identically, trains
-  on your data, and has worse rate limits.
+- Model choice, post-2026-09-17 meter: contributor drains **~6x less** than
+  standard — 5-6x more mileage per $5 — at the cost of the training clause,
+  `max` effort (standard-only), and 100 RPM vs 3000. Standard stays the pick
+  for sensitive work; contributor is now the quota stretcher.
 
 ---
 MIT — not affiliated with Meta. Subscription use outside the Muse Code CLI
