@@ -9,6 +9,7 @@
   </array>
   <key>EnvironmentVariables</key><dict>
     <key>SUB_PROXY_PORT</key><string>8920</string>
+    <key>SUB_PROXY_HOST</key><string>0.0.0.0</string>
     <key>SUB_PROXY_MODEL</key><string>muse-spark-1.2</string>
   </dict>
   <key>RunAtLoad</key><true/>

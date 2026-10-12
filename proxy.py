@@ -20,7 +20,8 @@ OAuth login that populates the keychain item) — the raw device flow only
 yields a ``dca:`` token that api.meta.ai rejects, so the proxy does NOT
 implement its own login. See README for the full reverse-engineering notes.
 
-Env: SUB_PROXY_PORT (default 8920), SUB_PROXY_MODEL (default muse-spark-1.2),
+Env: SUB_PROXY_PORT (default 8920), SUB_PROXY_HOST (default 127.0.0.1 —
+set to the Tailscale IP to serve the tailnet), SUB_PROXY_MODEL (default muse-spark-1.2),
 MUSE_SUB_API_KEY.
 
 Endpoints:
@@ -62,6 +63,7 @@ import urllib.request
 import urllib.error
 
 PORT = int(os.environ.get("SUB_PROXY_PORT", "8920"))
+HOST = os.environ.get("SUB_PROXY_HOST", "127.0.0.1")
 MODEL_DEFAULT = os.environ.get("SUB_PROXY_MODEL", "muse-spark-1.2")
 UPSTREAM = "https://api.meta.ai/v1"
 UA = "muse-sub-proxy/0.2"
@@ -460,6 +462,6 @@ class Threaded(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 if __name__ == "__main__":
-    print("muse-sub-proxy (standalone) on 127.0.0.1:%s model=%s" % (PORT, MODEL_DEFAULT),
+    print("muse-sub-proxy (standalone) on %s:%s model=%s" % (HOST, PORT, MODEL_DEFAULT),
           flush=True)
-    Threaded(("127.0.0.1", PORT), H).serve_forever()
+    Threaded((HOST, PORT), H).serve_forever()
