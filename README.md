@@ -4,7 +4,7 @@ Expose Meta API access through OpenAI-compatible endpoints. **No `muse` CLI anyw
 
 ```
 External tool (OpenCode/Hermes/etc)     muse-sub-proxy              Meta API
-  POST /v1/chat/completions  --->  POST /v1/responses (Bearer LLM|) --->  Muse Spark
+  POST /v1/chat/completions  --->  POST /v1/responses (Bearer LLM|) --->  Muse Spark / Wonder
   OpenAI JSON (+SSE)         <---  output_text translated     <---
 ```
 
@@ -30,7 +30,8 @@ LaunchAgent: `cp com.muse-sub-proxy.plist ~/Library/LaunchAgents/ && launchctl l
 ## Endpoints
 
 - `GET /v1/models` — live ids from Meta (statics are fallback only, so new
-  models survive CLI/API updates with no proxy change)
+  models survive CLI/API updates with no proxy change; Wonder 1.0 ids are
+  also in the fallback since 2026-10-12)
 - `GET /v1/usage` — latest subscription quota snapshot (see below), persisted
   to `~/.config/muse-sub-proxy/usage.json` after every chat completion
 - `POST /v1/chat/completions` — OpenAI chat format, `stream: true/false`.
@@ -57,6 +58,18 @@ LaunchAgent: `cp com.muse-sub-proxy.plist ~/Library/LaunchAgents/ && launchctl l
 
 Hermes: provider entry `muse-sub` with `base_url: http://127.0.0.1:8920/v1`
 (set via `hermes config set providers.muse-sub.base_url ...`).
+
+## Muse Wonder (2026-10-12)
+
+`muse-wonder-1.0` + `muse-wonder-1.0-contributor` are live upstream and
+pass straight through — no proxy code change was needed beyond adding them
+to the static fallback list. Verified live on a $5 sub key: both return
+correct completions with a quota snapshot (`WONDER_SMOKE_OK` /
+`WONDER_STD_OK`, minimal effort, ~40-46 tokens). Catalog limits: ~1M
+context (`1007997`), 128K output, full effort ladder incl `max` on both
+variants. No separate "Wonder Full" model id exists upstream on this tier
+(`muse-wonder-full-*` guesses all 404) — Full is a subscription
+entitlement, not a distinct id, so there is nothing extra to wire.
 
 ## Reverse-engineering notes (how we got here)
 

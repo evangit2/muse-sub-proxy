@@ -36,6 +36,8 @@ Stretch knobs (all opt-in, all verified live):
   rejected upstream. Absent = upstream default (quality-first).
   1.3 also takes low/medium/high/xhigh/max; 1.2 tops out at xhigh
   (max rejected) — verified live against the upstream error strings.
+  Wonder 1.0 (standard + contributor) takes the full ladder incl max
+  (catalog variants + live minimal-effort smoke test, 2026-10-12).
   ``sub_session`` request field: name a server-side conversation. First call
   sends full history; follow-ups send only the newest user message plus
   previous_response_id (verified: 46 input tokens recalled full context).
@@ -67,7 +69,8 @@ UA = "muse-sub-proxy/0.2"
 MODELS = [m.strip() for m in os.environ.get(
     "SUB_PROXY_MODELS",
     "muse-spark-1.2,muse-spark-1.3,muse-spark-1.2-contributor,"
-    "muse-spark-1.3-contributor").split(",") if m.strip()]
+    "muse-spark-1.3-contributor,muse-wonder-1.0,"
+    "muse-wonder-1.0-contributor").split(",") if m.strip()]
 
 CONF_DIR = os.path.expanduser("~/.config/muse-sub-proxy")
 USAGE_PATH = os.path.join(CONF_DIR, "usage.json")
